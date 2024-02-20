@@ -3,137 +3,137 @@
 # No writer can write while a reader is reading
 # Writers have priority
 
-import threading
 from threading import Thread
 from threading import Lock
-from threading import Semaphore
 from datetime import datetime
 import random
 import time
 
-# Mutex lock for Writers
-lock = Lock()
+# Mutex locks for writers
+writerLock = Lock()
+wrtCountLock = Lock()
 
 readLock = Lock()
-
-# Semaphore for Readers, up to 3 active readers can read concurrently
-#rd = Semaphore(3)
 
 # Shared resource
 resource = "Initial String Value"
 
-# Keeps track of readers
-readers = 0
-
+rdCount = 0
 writers = 0
+writersWaiting = 0
+
 
 # Writes a timestamp, including seconds, to the string.
 class WriterA(Thread):
     def run(self):
         global resource
-        global readers
-        #global writers
+        global writersWaiting
 
         for x in range(1, 10):
-
-            time.sleep(random.uniform(0, 3/10))
+            time.sleep(random.uniform(0, 3 / 10))
 
             print("WriterA requests access")
+            with wrtCountLock:
+                writersWaiting += 1
 
             # Acquire mutex lock for writers
-            lock.acquire()
+            with writerLock:
+                writersWaiting -= 1
 
-            # Writers priority
-            #if ()
+                print("WriterA locking!")
+                tmp = str(writersWaiting)
+                print("Atm there are " + tmp + " writers waiting to enter CS")
 
-            temp = datetime.now()
+                # Prints out resource before and after
+                temp = datetime.now()
+                print("Shared resource BEFORE overwrite for %s is: %s " % (self.name, resource))
+                resource = temp.strftime("%Y/%m/%d %H:%M:%S")
+                print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, resource))
 
-            print("WriterA locking!")
-            t = time.localtime()
-            print("Shared resource BEFORE overwrite for %s is: %s " % (self.name, resource))
-            resource = temp.strftime("%Y/%m/%m %H:%M:%S")
-            print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, temp))
+                if writersWaiting == 0:
+                    print("Releasing lock for readers, no more writers waiting")
+                    # If the readLock is locked
+                    if readLock.locked():
+                        #readLock.release()
 
-            lock.release()
+                else:
+                    print("More writers want to write")
+                    readLock.acquire()
+
             print("WriterA releases lock!\n" + '-' * 68)
 
+
 # Writes a reversed timestamp, including seconds, to the string.
+
 class WriterB(Thread):
     def run(self):
         global resource
-        #global readers
-        global writers
+        global writersWaiting
 
         for x in range(1, 10):
-
-            time.sleep(random.uniform(0,3/10))
+            time.sleep(random.uniform(0, 3 / 10))
 
             print("WriterB requests access")
 
-            # Fetch lock
-            lock.acquire()
-            temp = datetime.now()
+            with wrtCountLock:
+                writersWaiting += 1
 
-            print("WriterB locks!")
+            with writerLock:
+                writersWaiting -= 1
 
-            print("Shared resource BEFORE overwrite for %s is:  %s " % (self.name, resource))
-            resource = temp.strftime("%Y/%m/%m %H:%M:%S")
-            # %S%M%H %m %m %Y
+                # Get lock for readers
+                readLock.acquire()
 
-            resource = temp.strftime("%S:%M:%H %d%m%Y")
+                print("WriterB locking!")
+                tmp = str(writersWaiting)
+                print("Atm there are " + tmp + " writers")
 
-            print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, resource))
+                temp = datetime.now()
+                print("Shared resource BEFORE overwrite for %s is:  %s " % (self.name, resource))
+                resource = temp.strftime("%S:%M:%H %d/%m/%Y")
+                print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, resource))
 
-            # Release lock
-            lock.release()
+                if writersWaiting == 0:
+                    print("Releasing lock for readers, no more writers waiting")
+                    readLock.release()
+
             print("WriterB releases lock!\n" + '-' * 68)
+
 
 class Reader(Thread):
     def run(self):
         global resource
-        global readers
+        global rdCount
 
         for x in range(1, 10):
+            time.sleep(random.uniform(0, 3 / 10))
 
-            time.sleep(random.uniform(0, 3/10))
-
-            # Only one reader can modify readers at the time
-            readLock.acquire()
-
-            print("Reader locks!")
+            print("Reader wants to enter")
 
             # Entry section
+            with readLock:
+                print("Reader locks!")
+                rdCount += 1
 
-            # Keeps track of the number of readers
-            readers += 1
+                # No writers can write if there are readers in the critical section
+                if rdCount == 1:
+                    writerLock.acquire()
 
-            if readers == 1:
-                lock.acquire()
-                print("Aquiring lock so no Writers can write!")
-
-            # Releasing lock for entry
-            readLock.release()
-
-            # Temporary copy to print out the string equivalent of the number of readers
-            tmp = str(readers)
-            print("Right now there are: " + tmp + " number of readers")
+            # Temporary copy to print out the string equivalent of the number of rdCount
+            tmp = str(rdCount)
+            print("Right now there are: " + tmp + " readers")
 
             # Critical section
             print("Prints out shared resource for reader: ", resource)
 
-            # Getting lock for exit section, prevents data race
-            readLock.acquire()
-
             # Exit section
-            readers -= 1
+            with readLock:
+                rdCount -= 1
 
-            # If there are no readers reading, return the lock
-            if readers == 0:
-                lock.release()
-                print("Releasing lock so writers can write")
-
-            # Release after exit
-            readLock.release()
+                # Releases writerMutex
+                if rdCount == 0:
+                    print("Releasing lock for writer")
+                    writerLock.release()
 
             print("Releases lock for Reader!\n", '-' * 68)
 
@@ -145,28 +145,29 @@ def main():
     threads.append(t1)
     t1.start()
 
-    t2 = Reader()
-    threads.append(t2)
-    t2.start()
+    #t2 = Reader()
+    #threads.append(t2)
+    #t2.start()
 
     t3 = WriterA()
     threads.append(t3)
     t3.start()
 
-    t4 = WriterB()
+    t4 = WriterA()
     threads.append(t4)
     t4.start()
 
-    #t5 = WriterB()
-    #threads.append(t5)
-    #t5.start()
+    t5 = WriterA()
+    threads.append(t5)
+    t5.start()
 
-    #t6 = Reader()
-    #threads.append(t6)
-    #t6.start()
+    # t6 = Reader()
+    # threads.append(t6)
+    # t6.start()
 
     # Waits for all threads to finish executing
     for t in threads:
         t.join()
+
 
 main()
