@@ -1,7 +1,4 @@
-# Problem 1 - Mutual exclusion
-# Only one writer can write at a time
-# No writer can write while a reader is reading
-# Writers have priority
+
 
 from threading import Thread
 from threading import Lock
@@ -10,55 +7,55 @@ import random
 import time
 
 # Mutex locks for writers
-writerLock = Lock()
-wrtCountLock = Lock()
+resource = Lock()
+wrtCount = Lock()
+priority = Lock()
 
-readLock = Lock()
+counter = Lock()
 
-# Shared resource
-resource = "Initial String Value"
+# Shared shared_string
+shared_string = "Initial String Value"
+wrtFlag = False
 
 rdCount = 0
-writers = 0
 writersWaiting = 0
-
 
 # Writes a timestamp, including seconds, to the string.
 class WriterA(Thread):
     def run(self):
-        global resource
+        global shared_string
         global writersWaiting
+        global wrtFlag
 
         for x in range(1, 10):
             time.sleep(random.uniform(0, 3 / 10))
 
             print("WriterA requests access")
-            with wrtCountLock:
+            with wrtCount:
                 writersWaiting += 1
 
             # Acquire mutex lock for writers
-            with writerLock:
-                writersWaiting -= 1
+            with resource:
+                # Only get the reader lock if it hasn't been acquired
+                if not wrtFlag:
+                    priority.acquire()
+                    wrtFlag = True
 
-                print("WriterA locking!")
-                tmp = str(writersWaiting)
-                print("Atm there are " + tmp + " writers waiting to enter CS")
+                with wrtCount:
+                    writersWaiting -= 1
 
-                # Prints out resource before and after
+                # Prints out shared_string before and after
                 temp = datetime.now()
-                print("Shared resource BEFORE overwrite for %s is: %s " % (self.name, resource))
-                resource = temp.strftime("%Y/%m/%d %H:%M:%S")
-                print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, resource))
+                print("Shared shared_string BEFORE overwrite for %s is: %s " % (self.name, shared_string))
+                shared_string = temp.strftime("%Y/%m/%d %H:%M:%S")
+                print("Shared shared_string AFTER overwrite for %s is:  %s " % (self.name, shared_string))
 
+                # Release counter
                 if writersWaiting == 0:
                     print("Releasing lock for readers, no more writers waiting")
-                    # If the readLock is locked
-                    if readLock.locked():
-                        #readLock.release()
+                    priority.release()
+                    wrtFlag = False
 
-                else:
-                    print("More writers want to write")
-                    readLock.acquire()
 
             print("WriterA releases lock!\n" + '-' * 68)
 
@@ -67,7 +64,7 @@ class WriterA(Thread):
 
 class WriterB(Thread):
     def run(self):
-        global resource
+        global shared_string
         global writersWaiting
 
         for x in range(1, 10):
@@ -75,34 +72,34 @@ class WriterB(Thread):
 
             print("WriterB requests access")
 
-            with wrtCountLock:
+            with wrtCount:
                 writersWaiting += 1
 
-            with writerLock:
+            with resource:
                 writersWaiting -= 1
 
                 # Get lock for readers
-                readLock.acquire()
+                counter.acquire()
 
                 print("WriterB locking!")
                 tmp = str(writersWaiting)
                 print("Atm there are " + tmp + " writers")
 
                 temp = datetime.now()
-                print("Shared resource BEFORE overwrite for %s is:  %s " % (self.name, resource))
-                resource = temp.strftime("%S:%M:%H %d/%m/%Y")
-                print("Shared resource AFTER overwrite for %s is:  %s " % (self.name, resource))
+                print("Shared shared_string BEFORE overwrite for %s is:  %s " % (self.name, shared_string))
+                shared_string = temp.strftime("%S:%M:%H %d/%m/%Y")
+                print("Shared shared_string AFTER overwrite for %s is:  %s " % (self.name, shared_string))
 
                 if writersWaiting == 0:
                     print("Releasing lock for readers, no more writers waiting")
-                    readLock.release()
+                    counter.release()
 
             print("WriterB releases lock!\n" + '-' * 68)
 
 
 class Reader(Thread):
     def run(self):
-        global resource
+        global shared_string
         global rdCount
 
         for x in range(1, 10):
@@ -110,34 +107,36 @@ class Reader(Thread):
 
             print("Reader wants to enter")
 
+            #priority.acquire()
+
             # Entry section
-            with readLock:
+            with counter:
                 print("Reader locks!")
                 rdCount += 1
 
                 # No writers can write if there are readers in the critical section
                 if rdCount == 1:
-                    writerLock.acquire()
+                    print(">>>Reader acquires writer lock!")
+                    resource.acquire()
 
             # Temporary copy to print out the string equivalent of the number of rdCount
             tmp = str(rdCount)
             print("Right now there are: " + tmp + " readers")
 
             # Critical section
-            print("Prints out shared resource for reader: ", resource)
+            print("Prints out shared shared_string for reader: ", shared_string)
 
             # Exit section
-            with readLock:
+            with counter:
                 rdCount -= 1
 
                 # Releases writerMutex
                 if rdCount == 0:
-                    print("Releasing lock for writer")
-                    writerLock.release()
+                    print("<<<Releasing lock for writer")
+                    resource.release()
 
             print("Releases lock for Reader!\n", '-' * 68)
-
-
+            priority.release()
 def main():
     threads = []
 
@@ -168,6 +167,5 @@ def main():
     # Waits for all threads to finish executing
     for t in threads:
         t.join()
-
 
 main()
