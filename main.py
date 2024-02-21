@@ -15,7 +15,7 @@ counter = Lock()
 
 # Shared shared_string
 shared_string = "Initial String Value"
-wrtFlag = False
+wrtPriority = False
 
 rdCount = 0
 writersWaiting = 0
@@ -25,10 +25,15 @@ class WriterA(Thread):
     def run(self):
         global shared_string
         global writersWaiting
-        global wrtFlag
+        global wrtPriority
 
-        for x in range(1, 10):
+        while True:
             time.sleep(random.uniform(0, 3 / 10))
+
+            # Only get the reader lock if it hasn't been acquired
+            if not wrtPriority:
+                priority.acquire()
+                wrtPriority = True
 
             print("WriterA requests access")
             with wrtCount:
@@ -36,10 +41,6 @@ class WriterA(Thread):
 
             # Acquire mutex lock for writers
             with resource:
-                # Only get the reader lock if it hasn't been acquired
-                if not wrtFlag:
-                    priority.acquire()
-                    wrtFlag = True
 
                 with wrtCount:
                     writersWaiting -= 1
@@ -53,8 +54,9 @@ class WriterA(Thread):
                 # Release counter
                 if writersWaiting == 0:
                     print("Releasing lock for readers, no more writers waiting")
-                    priority.release()
-                    wrtFlag = False
+                    if priority.locked():
+                        priority.release()
+                        wrtFlag = False
 
 
             print("WriterA releases lock!\n" + '-' * 68)
@@ -78,9 +80,6 @@ class WriterB(Thread):
             with resource:
                 writersWaiting -= 1
 
-                # Get lock for readers
-                counter.acquire()
-
                 print("WriterB locking!")
                 tmp = str(writersWaiting)
                 print("Atm there are " + tmp + " writers")
@@ -92,7 +91,13 @@ class WriterB(Thread):
 
                 if writersWaiting == 0:
                     print("Releasing lock for readers, no more writers waiting")
-                    counter.release()
+                    if priority.locked():
+                        priority.release()
+
+                # If there are writers waiting, acquire priority
+                else:
+                    priority.acquire()
+
 
             print("WriterB releases lock!\n" + '-' * 68)
 
@@ -102,12 +107,13 @@ class Reader(Thread):
         global shared_string
         global rdCount
 
-        for x in range(1, 10):
+        #for x in range(1, 10):
+        while True:
             time.sleep(random.uniform(0, 3 / 10))
 
             print("Reader wants to enter")
 
-            #priority.acquire()
+            priority.acquire()
 
             # Entry section
             with counter:
@@ -136,7 +142,10 @@ class Reader(Thread):
                     resource.release()
 
             print("Releases lock for Reader!\n", '-' * 68)
-            priority.release()
+            if priority.locked():
+                priority.release()
+
+
 def main():
     threads = []
 
@@ -144,21 +153,21 @@ def main():
     threads.append(t1)
     t1.start()
 
-    #t2 = Reader()
-    #threads.append(t2)
-    #t2.start()
+    t2 = Reader()
+    threads.append(t2)
+    t2.start()
 
-    t3 = WriterA()
+    t3 = WriterB()
     threads.append(t3)
     t3.start()
 
-    t4 = WriterA()
+    t4 = WriterB()
     threads.append(t4)
     t4.start()
 
-    t5 = WriterA()
-    threads.append(t5)
-    t5.start()
+    #t5 = WriterA()
+    #threads.append(t5)
+    #t5.start()
 
     # t6 = Reader()
     # threads.append(t6)
