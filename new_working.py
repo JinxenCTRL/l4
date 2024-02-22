@@ -10,12 +10,12 @@ wrtCount = Lock()
 counter = Lock()
 priority = Lock()
 
-# Shared shared_string
+# Global variable
 shared_string = "Initial String Value"
 
+# Counters
 rdCount = 0
 writersWaiting = 0
-priorityBusy = False
 
 # Writes a timestamp, including seconds, to the string.
 class WriterA(Thread):
@@ -25,30 +25,19 @@ class WriterA(Thread):
 
         while True:
             time.sleep(random.uniform(0, 3 / 10))
-            print("req. access to first wrtCount [writerA, increment]")
             with wrtCount:
-                print("ACQ. first wrtCount [writerA, increment]")
                 writersWaiting += 1
-                print("waiting to retrieve resource [writerA]")
 
             # Acquire mutex lock for writers
             with resource:
-                print("entered CS writerA")
+                print("Entered CS for WriterA using thread: %s " % (self.name))
 
-                print("tryAcquire priority [writerA]")
-
-                # Only retrieve priority if locked was released or first writer in a sequence of writers
+                # Only retrieve priority if locked was released or it's the first writer in a sequence of writers
                 if not priority.locked():
                     priority.acquire()
-                    print("ACQUIRED PRIORITY in [writerA]")
 
-                print("trying to acq. second wrtCount [writerA, decrement]")
                 with wrtCount:
-                    print("ACQ. second wrtCount [writerA, decrement]")
                     writersWaiting -= 1
-                    print("Decrementing writer count [writerA]")
-                    tmp = str(writersWaiting)
-                    print("currently there are " + tmp + " writers waiting")
 
                 # Prints out shared_string before and after
                 temp = datetime.now()
@@ -58,20 +47,13 @@ class WriterA(Thread):
 
                 with wrtCount:
                     # Release counter
-                    tmp = str(writersWaiting)
-                    print("currently there are " + tmp + " writers waiting")
                     if writersWaiting == 0:
-
-                        # Release priority if we don't have
+                        # Release priority if we have no writers waiting to enter CS
                         if priority.locked():
                             priority.release()
-                            print("releasing PRIORITY [writerA]")
 
-                        else:
-                            print("priority is NOT locked")
-                            print("not releasing priority lock this time")
+            print("Exit CS for WriterA using thread: %s " % (self.name) + "\n" + '-' * 68)
 
-            print("WriterA releases RESOURCE!\n" + '-' * 68)
 
 # Writes a reversed timestamp, including seconds, to the string.
 
@@ -87,20 +69,15 @@ class WriterB(Thread):
             print("WriterB requests access to entry section")
 
             with wrtCount:
-                print("incrementing writer count of WriterB")
                 writersWaiting += 1
 
             # ENTER CRITICAL SECTION
             with resource:
-                print("entered CS writerB")
+                print("Entered CS [WriterB]")
                 with wrtCount:
                     print("decrementing writer count of writerB")
                     writersWaiting -= 1
 
-                    # Villkor för counten, behöver lämna vidare. Vänta med att räkna ned tills du kommer till slutet.
-                    # Counten ser att en ytterligare en writer vill in och lämnar inte in låset. Vi behöver ett condition. Vänta med att räkna ned.
-                    # Det är hur writers hanterar låset. Kopplad till hur jag räknar min writerCount.
-                    # Main ger ingen DL?
 
                     # Acquire priority for writers if there are writers waiting
                     #if writersWaiting > 0:
@@ -113,12 +90,12 @@ class WriterB(Thread):
                 print("Shared shared_string BEFORE overwrite for %s is:  %s " % (self.name, shared_string))
                 shared_string = temp.strftime("%S:%M:%H %d/%m/%Y")
                 print("Shared shared_string AFTER overwrite for %s is:  %s " % (self.name, shared_string))
-                with wrtCount:
-                    if writersWaiting == 0:
-                        print("Releasing lock for readers, no more writers waiting")
-                        # Release priority
-                        priority.release()
-                        #counter.release()
+            with wrtCount:
+                if writersWaiting == 0:
+                    print("Releasing lock for readers, no more writers waiting")
+                    # Release priority
+                    priority.release()
+                    #counter.release()
 
                     # Make sure readers can read
                     #if counter.locked():
@@ -140,6 +117,7 @@ class Reader(Thread):
             print("Trying to get priority [reader]")
             priority.acquire()
             print("Retrieved priority [reader]")
+            #if priority.locked():
             priority.release()
             print("Releasing priority [reader]")
 
