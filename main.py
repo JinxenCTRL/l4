@@ -6,16 +6,13 @@ from datetime import datetime
 import random
 import time
 
-# Mutex locks for writers
 resource = Lock()
 wrtCount = Lock()
 priority = Lock()
-
 counter = Lock()
 
 # Shared shared_string
 shared_string = "Initial String Value"
-wrtPriority = False
 
 rdCount = 0
 writersWaiting = 0
@@ -25,15 +22,13 @@ class WriterA(Thread):
     def run(self):
         global shared_string
         global writersWaiting
-        global wrtPriority
 
         while True:
             time.sleep(random.uniform(0, 3 / 10))
 
             # Only get the reader lock if it hasn't been acquired
-            if not wrtPriority:
+            if priority.locked():
                 priority.acquire()
-                wrtPriority = True
 
             print("WriterA requests access")
             with wrtCount:
@@ -56,8 +51,6 @@ class WriterA(Thread):
                     print("Releasing lock for readers, no more writers waiting")
                     if priority.locked():
                         priority.release()
-                        wrtFlag = False
-
 
             print("WriterA releases lock!\n" + '-' * 68)
 
@@ -114,6 +107,7 @@ class Reader(Thread):
             print("Reader wants to enter")
 
             priority.acquire()
+            priority.release()
 
             # Entry section
             with counter:
@@ -142,8 +136,7 @@ class Reader(Thread):
                     resource.release()
 
             print("Releases lock for Reader!\n", '-' * 68)
-            if priority.locked():
-                priority.release()
+
 
 
 def main():
@@ -157,11 +150,11 @@ def main():
     threads.append(t2)
     t2.start()
 
-    t3 = WriterB()
+    t3 = WriterA()
     threads.append(t3)
     t3.start()
 
-    t4 = WriterB()
+    t4 = WriterA()
     threads.append(t4)
     t4.start()
 
